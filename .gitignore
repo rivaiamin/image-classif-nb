@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
+*.pyzwz
+*.pyzwzw
+
+image_classification_env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+archives
