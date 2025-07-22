@@ -8,8 +8,12 @@ import os
 from datetime import datetime
 from sklearn.cluster import KMeans
 
+# Constants
+FEATURE_OUTPUT_DIR = 'output/feature_extraction'
+
 class FeatureExtractor:
     def __init__(self, image_size=(64, 64)):
+        self.output_dir = 'output/feature_extraction'
         self.image_size = image_size
         self.feature_names = []
         
@@ -268,7 +272,7 @@ def log_feature_info(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_message = f"[{timestamp}] FEATURE: {message}"
     print(log_message)
-    with open('feature_extraction_log.txt', 'a') as f:
+    with open(os.path.join(FEATURE_OUTPUT_DIR, 'feature_extraction_log.txt'), 'a') as f:
         f.write(log_message + '\n')
 
 def extract_features_from_dataset(true_dir, false_dir, image_size=(64, 64)):
@@ -298,7 +302,7 @@ def extract_features_from_dataset(true_dir, false_dir, image_size=(64, 64)):
                 
                 # Create visualization for first few images
                 if true_count <= 3:
-                    viz_path = f'feature_viz_true_{true_count}.png'
+                    viz_path = f'{FEATURE_OUTPUT_DIR}/feature_viz_true_{true_count}.png'
                     extractor.visualize_features(image, viz_path)
                     log_feature_info(f"Created visualization: {viz_path}")
     
@@ -316,7 +320,7 @@ def extract_features_from_dataset(true_dir, false_dir, image_size=(64, 64)):
                 
                 # Create visualization for first few images
                 if false_count <= 3:
-                    viz_path = f'feature_viz_false_{false_count}.png'
+                    viz_path = f'{FEATURE_OUTPUT_DIR}/feature_viz_false_{false_count}.png'
                     extractor.visualize_features(image, viz_path)
                     log_feature_info(f"Created visualization: {viz_path}")
     
@@ -329,6 +333,53 @@ def extract_features_from_dataset(true_dir, false_dir, image_size=(64, 64)):
     log_feature_info(f"  Feature types: Shape ({len([n for n in feature_names if 'shape' in n or 'edge' in n])})")
     
     return np.array(all_features), np.array(all_labels), feature_names
+
+
+def create_feature_analysis_plots(X, feature_names, save_path='output/feature_extraction/feature_analysis.png'):
+    """Create feature analysis plots"""
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    fig.suptitle('Feature Analysis - Color, Texture, and Shape Features', fontsize=16)
+    
+    # Feature type breakdown
+    color_features = [n for n in feature_names if 'color' in n]
+    texture_features = [n for n in feature_names if 'glcm' in n or 'lbp' in n]
+    shape_features = [n for n in feature_names if 'shape' in n or 'edge' in n]
+    
+    feature_counts = [len(color_features), len(texture_features), len(shape_features)]
+    feature_labels = ['Color', 'Texture', 'Shape']
+    
+    axes[0, 0].pie(feature_counts, labels=feature_labels, autopct='%1.1f%%', startangle=90)
+    axes[0, 0].set_title('Feature Type Distribution')
+    
+    # Feature importance (variance)
+    feature_variance = np.var(X, axis=0)
+    top_features_idx = np.argsort(feature_variance)[-10:]  # Top 10 features
+    top_feature_names = [feature_names[i] for i in top_features_idx]
+    
+    axes[0, 1].barh(range(len(top_feature_names)), feature_variance[top_features_idx])
+    axes[0, 1].set_yticks(range(len(top_feature_names)))
+    axes[0, 1].set_yticklabels(top_feature_names)
+    axes[0, 1].set_title('Top 10 Features by Variance')
+    axes[0, 1].set_xlabel('Variance')
+    
+    # Feature correlation heatmap (sample)
+    sample_features = X[:, :20]  # First 20 features for visualization
+    correlation_matrix = np.corrcoef(sample_features.T)
+    
+    im = axes[1, 0].imshow(correlation_matrix, cmap='coolwarm', aspect='auto')
+    axes[1, 0].set_title('Feature Correlation Matrix (First 20 Features)')
+    plt.colorbar(im, ax=axes[1, 0])
+    
+    # Feature distribution
+    axes[1, 1].hist(X.flatten(), bins=50, alpha=0.7, edgecolor='black')
+    axes[1, 1].set_title('Overall Feature Distribution')
+    axes[1, 1].set_xlabel('Feature Values')
+    axes[1, 1].set_ylabel('Frequency')
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    log_feature_info(f"Feature analysis plot saved to {save_path}")
 
 if __name__ == "__main__":
     # Test feature extraction
