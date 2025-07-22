@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hawar Daun Bakteri Classifier</title>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'rice-green': '#4ade80',
+                        'disease-red': '#ef4444',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8" x-data="classifierApp()">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">
+                Hawar Daun Bakteri Classifier
+            </h1>
+            <p class="text-gray-600 text-lg">
+                Identifikasi Hawar Daun Bakteri pada Daun Padi
+            </p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="max-w-2xl mx-auto">
+            <!-- Upload Form -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+                    Upload Gambar Daun Padi
+                </h2>
+                
+                <form @submit.prevent="classifyImage()" class="space-y-4">
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-rice-green transition-colors"
+                         :class="{ 'border-rice-green': selectedFile }">
+                        <div class="space-y-2">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <div class="text-gray-600">
+                                <label for="image" class="cursor-pointer">
+                                    <span class="font-medium text-rice-green hover:text-green-600">
+                                        Klik untuk upload gambar
+                                    </span>
+                                    <span class="text-gray-500"> atau drag and drop</span>
+                                </label>
+                                <input id="image" name="image" type="file" accept="image/*" 
+                                       @change="handleFileSelect($event)" class="hidden" required>
+                            </div>
+                            <p class="text-xs text-gray-500">
+                                PNG, JPG, JPEG hingga 10MB
+                            </p>
+                            <div x-show="selectedFile" class="text-sm text-gray-600">
+                                <p x-text="selectedFile?.name"></p>
+                            </div>
+                            
+                            <!-- Image Preview -->
+                            <div x-show="imagePreview" class="mt-4">
+                                <div class="relative inline-block">
+                                    <img :src="imagePreview" 
+                                         alt="Preview" 
+                                         class="max-w-full h-32 object-cover rounded-lg border-2 border-gray-200">
+                                    <button @click="removeImage()" 
+                                            class="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-center">
+                        <button type="submit" 
+                                :disabled="!selectedFile || isProcessing"
+                                class="bg-rice-green hover:bg-green-600 disabled:bg-gray-400 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200 flex items-center space-x-2">
+                            <div x-show="isProcessing" class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            <svg x-show="!isProcessing" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span x-text="isProcessing ? 'Menganalisis...' : 'Analisis Gambar'"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Result Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div x-show="!result && !error" class="text-center text-gray-500">
+                    <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <p>Upload gambar untuk memulai analisis</p>
+                </div>
+
+                <!-- Success Result -->
+                <template x-if="result">
+                    <div x-transition class="text-center">
+                        <template x-if="result.classification === 'Hawar Daun Bakteri'">
+                            <div>
+                                <div class="inline-flex items-center justify-center w-16 h-16 bg-disease-red rounded-full mb-4">
+                                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                    </svg>
+                                </div>
+                                <h3 class="text-2xl font-bold text-disease-red mb-2">
+                                    ⚠️ Hawar Daun Bakteri Terdeteksi
+                                </h3>
+                                <p class="text-gray-600 mb-4">
+                                    Gambar menunjukkan gejala Hawar Daun Bakteri pada daun padi
+                                </p>
+                            </div>
+                        </template>
+
+                        <template x-if="result.classification === 'Bukan Hawar Daun Bakteri'">
+                            <div>
+                                <div class="inline-flex items-center justify-center w-16 h-16 bg-rice-green rounded-full mb-4">
+                                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <h3 class="text-2xl font-bold text-rice-green mb-2">
+                                    ✅ Bukan Hawar Daun Bakteri
+                                </h3>
+                                <p class="text-gray-600 mb-4">
+                                    Gambar tidak menunjukkan gejala Hawar Daun Bakteri
+                                </p>
+                            </div>
+                        </template>
+
+                        <!-- Confidence Score -->
+                        <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-2">Tingkat Kepercayaan</h4>
+                            <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+                                <div class="h-3 rounded-full transition-all duration-500"
+                                     :class="result.classification === 'Hawar Daun Bakteri' ? 'bg-disease-red' : 'bg-rice-green'"
+                                     :style="`width: ${result.confidence}%`"></div>
+                            </div>
+                            <p class="text-sm text-gray-600" x-text="`${result.confidence.toFixed(1)}% kepercayaan`"></p>
+                        </div>
+
+                        <!-- Detailed Probabilities -->
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <h5 class="font-semibold text-red-800 mb-1">Hawar Daun Bakteri</h5>
+                                <p class="text-2xl font-bold text-red-600" x-text="`${result.probabilities.hawar_daun_bakteri.toFixed(1)}%`"></p>
+                            </div>
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <h5 class="font-semibold text-green-800 mb-1">Bukan Hawar Daun Bakteri</h5>
+                                <p class="text-2xl font-bold text-green-600" x-text="`${result.probabilities.bukan_hawar_daun_bakteri.toFixed(1)}%`"></p>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex justify-center space-x-3">
+                            <button @click="resetForm()" 
+                                    class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                                Analisis Gambar Lain
+                            </button>
+                            <button @click="window.print()" 
+                                    class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                                Cetak Hasil
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Error Result -->
+                <template x-if="error">
+                    <div x-transition class="text-center">
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-red-500 rounded-full mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-red-600 mb-2">
+                        ⚠️ Terjadi Kesalahan
+                    </h3>
+                    <p class="text-gray-600 mb-4" x-text="error"></p>
+
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                        <h4 class="text-lg font-semibold text-red-800 mb-2">Saran</h4>
+                        <ul class="text-red-700 text-left space-y-1">
+                            <li>• Pastikan file gambar valid (PNG, JPG, JPEG)</li>
+                            <li>• Ukuran file tidak lebih dari 10MB</li>
+                            <li>• Gambar harus jelas dan tidak blur</li>
+                            <li>• Pastikan gambar menunjukkan daun padi</li>
+                        </ul>
+                    </div>
+
+                    <div class="flex justify-center space-x-3">
+                        <button @click="resetForm()" 
+                                class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                            Coba Lagi
+                        </button>
+                    </div>
+                </div>
+                </template>
+            </div>
+
+            <!-- Information Section -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6">
+                <h3 class="text-lg font-semibold text-blue-800 mb-3">
+                    Tentang Hawar Daun Bakteri
+                </h3>
+                <div class="text-blue-700 space-y-2">
+                    <p>
+                        <strong>Hawar Daun Bakteri</strong> adalah penyakit pada tanaman padi yang disebabkan oleh bakteri 
+                        <em>Xanthomonas oryzae pv. oryzae</em>.
+                    </p>
+                    <p>
+                        Gejala yang terlihat:
+                    </p>
+                    <ul class="list-disc list-inside ml-4 space-y-1">
+                        <li>Bercak-bercak putih atau kuning pada daun</li>
+                        <li>Daun mengering dan layu</li>
+                        <li>Pertumbuhan tanaman terhambat</li>
+                        <li>Hasil panen menurun</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8 text-gray-500">
+            <p>&copy; 2025 Hawar Daun Bakteri Classifier - Research Project</p>
+        </div>
+    </div>
+
+    <script>
+        function classifierApp() {
+            return {
+                selectedFile: null,
+                imagePreview: null,
+                isProcessing: false,
+                result: null,
+                error: null,
+
+                handleFileSelect(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        this.selectedFile = file;
+                        this.error = null;
+                        this.result = null;
+                        
+                        // Create image preview
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.imagePreview = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                },
+
+                async classifyImage() {
+                    if (!this.selectedFile) return;
+
+                    this.isProcessing = true;
+                    this.error = null;
+                    this.result = null;
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('image', this.selectedFile);
+
+                        const response = await fetch('/classify', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.result = data;
+                        } else {
+                            const errorData = await response.json();
+                            this.error = errorData.error || 'Terjadi kesalahan dalam memproses gambar';
+                        }
+                    } catch (err) {
+                        this.error = 'Terjadi kesalahan dalam mengirim gambar';
+                        console.error('Error:', err);
+                    } finally {
+                        this.isProcessing = false;
+                    }
+                },
+
+                resetForm() {
+                    this.selectedFile = null;
+                    this.imagePreview = null;
+                    this.result = null;
+                    this.error = null;
+                    document.getElementById('image').value = '';
+                },
+
+                removeImage() {
+                    this.selectedFile = null;
+                    this.imagePreview = null;
+                    document.getElementById('image').value = '';
+                }
+            }
+        }
+    </script>
+</body>
+</html> 
