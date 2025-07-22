@@ -10,3 +10,4 @@ pillow==11.1.0
 requests==2.32.3
 rich==14.0.0 
 notebook==7.0.0
+fpdf==1.7.2
