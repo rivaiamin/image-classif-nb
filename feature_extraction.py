@@ -9,7 +9,7 @@ from datetime import datetime
 from sklearn.cluster import KMeans
 
 # Constants
-FEATURE_OUTPUT_DIR = 'output/feature_extraction'
+FEATURE_OUTPUT_DIR = 'output/00_feature_extraction'
 
 class FeatureExtractor:
     def __init__(self, image_size=(64, 64)):

@@ -27,6 +27,16 @@ LOG_FILE = 'logs/training_enhanced_log.txt'
 # --- Parameter Tuning ---
 VAR_SMOOTHING_VALUES = [1e-9, 1e-8, 1e-7, 1e-6]  # Nilai var_smoothing untuk tuning GaussianNB
 
+# Output directory constants for better organization
+OUTPUT_DIRS = {
+    'feature_extraction': 'output/00_feature_extraction',
+    'train_model': 'output/01_train_model',
+    'test_validation': 'output/02_test_validation',
+    'summary': 'output/03_summary',
+    'classification_summary': 'output/04_classification_summary',
+    'model_comparison': 'output/05_model_comparison'
+}
+
 def log_info(message):
     """Log information with timestamp"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -148,7 +158,7 @@ def test_model(model, X_test, y_test):
         'probabilities': y_pred_proba
     }
 
-def plot_confusion_matrix(conf_matrix, save_path='output/train_model/confusion_matrix_enhanced.png'):
+def plot_confusion_matrix(conf_matrix, save_path='output/01_train_model/confusion_matrix_enhanced.png'):
     """Plot and save confusion matrix"""
     plt.figure(figsize=(8, 6))
     sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', 
@@ -162,7 +172,7 @@ def plot_confusion_matrix(conf_matrix, save_path='output/train_model/confusion_m
     plt.close()
     log_info(f"Enhanced confusion matrix plot saved to {save_path}")
 
-def save_test_results_table(y_true, y_pred, y_proba, save_path='output/test_validation_model/test_results.csv'):
+def save_test_results_table(y_true, y_pred, y_proba, save_path='output/02_test_validation/test_results.csv'):
     """
     Save test results (ground truth, prediction, probabilities) as a CSV file.
     """
@@ -176,7 +186,7 @@ def save_test_results_table(y_true, y_pred, y_proba, save_path='output/test_vali
     df.to_csv(save_path, index=False)
     log_info(f"Test results table saved to {save_path}")
 
-def save_test_results_image(y_true, y_pred, y_proba, save_path='output/test_validation_model/test_results.png', max_rows=20):
+def save_test_results_image(y_true, y_pred, y_proba, save_path='output/02_test_validation/test_results.png', max_rows=20):
     """
     Save test results (ground truth, prediction, probabilities) as an image (PNG).
     """
@@ -282,7 +292,7 @@ def train_model_step():
     best_model = None
     best_vs = None
     best_results = None
-    train_output_dir = 'output/train_model'  # Step 1 outputs
+    train_output_dir = OUTPUT_DIRS['train_model']  # Step 1 outputs
     tuning_results = []  # Untuk menyimpan hasil tuning
     for vs in VAR_SMOOTHING_VALUES:
         log_info(f"\n--- Training with var_smoothing={vs} ---")
@@ -369,7 +379,7 @@ def step5_model_comparison_evaluation(X_train, X_test, y_train, y_test):
     log_info("=" * 60)
     
     # Create output directory for Step 5
-    step5_output_dir = 'output/step5_model_comparison'
+    step5_output_dir = OUTPUT_DIRS['model_comparison']
     os.makedirs(step5_output_dir, exist_ok=True)
     
     # Define models to compare
@@ -841,11 +851,11 @@ def main():
         model=best_model,
         X_test=X_test,
         y_test=y_test,
-        output_dir='output/test_validation_model'
+        output_dir=OUTPUT_DIRS['test_validation']
     )
 
     # Step 3: Save summary PDF in new output/summary/ directory
-    summary_dir = 'output/summary'
+    summary_dir = OUTPUT_DIRS['summary']
     extra_info = [
         f"Model: GaussianNB (var_smoothing={best_model.var_smoothing})",
         f"Test samples: {len(X_test)}",
@@ -854,7 +864,7 @@ def main():
     save_classification_summary_pdf(results, summary_dir, extra_info=extra_info)
 
     # Step 4: Save detailed summary PDF in new output/classification_summary/ directory
-    detailed_summary_dir = 'output/classification_summary'
+    detailed_summary_dir = OUTPUT_DIRS['classification_summary']
     save_detailed_classification_summary(results, detailed_summary_dir, extra_info=extra_info)
 
     # Reload model and test again (optional)
