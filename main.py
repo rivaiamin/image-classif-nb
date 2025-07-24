@@ -34,7 +34,8 @@ OUTPUT_DIRS = {
     'test_validation': 'output/02_test_validation',
     'summary': 'output/03_summary',
     'classification_summary': 'output/04_classification_summary',
-    'model_comparison': 'output/05_model_comparison'
+    'model_comparison': 'output/05_model_comparison',
+    'final_visualization': 'output/06_final_visualization'  # New directory for Step 6
 }
 
 def log_info(message):
@@ -842,6 +843,353 @@ def create_summary_statistics_table(comparison_results, output_dir):
     
     log_info(f"Summary statistics table saved to {summary_path}")
 
+def step6_final_visualization(X_train, X_test, y_train, y_test, comparison_results=None, best_model=None):
+    """
+    Step 6: Visualisasi Hasil Akhir (Confusion Matrix & ROC)
+    Creates final visualizations using the best model from Step 5 comparison
+    """
+    log_info("=" * 60)
+    log_info("STEP 6: FINAL VISUALIZATION - Confusion Matrix & ROC")
+    log_info("=" * 60)
+    
+    # Create output directory
+    output_dir = OUTPUT_DIRS['final_visualization']
+    os.makedirs(output_dir, exist_ok=True)
+    log_info(f"Created output directory: {output_dir}")
+    
+    # Use the best model from Step 5 comparison if available
+    if comparison_results is not None:
+        # Find the best model from Step 5 comparison
+        best_model_result = max(comparison_results, key=lambda x: x['accuracy'])
+        log_info(f"Using best model from Step 5: {best_model_result['model_name']}")
+        log_info(f"Best model accuracy: {best_model_result['accuracy']:.4f}")
+        
+        # Recreate the best model
+        if 'LogisticRegression' in best_model_result['model_name']:
+            from sklearn.linear_model import LogisticRegression
+            best_model = LogisticRegression(random_state=42, max_iter=1000)
+        elif 'RandomForest' in best_model_result['model_name']:
+            from sklearn.ensemble import RandomForestClassifier
+            best_model = RandomForestClassifier(n_estimators=100, random_state=42)
+        else:
+            # Extract var_smoothing from model name for GaussianNB
+            import re
+            match = re.search(r'var_smoothing=([\d.e-]+)', best_model_result['model_name'])
+            var_smoothing = float(match.group(1)) if match else 1e-9
+            best_model = GaussianNB(var_smoothing=var_smoothing)
+        
+        # Train the best model
+        log_info("Training the best model from Step 5...")
+        best_model.fit(X_train, y_train)
+        
+        # Use the predictions from Step 5
+        y_pred = best_model_result['predictions']
+        y_proba = best_model_result['probabilities']
+        accuracy = best_model_result['accuracy']
+        precision = best_model_result['precision']
+        recall = best_model_result['recall']
+        f1 = best_model_result['f1_score']
+        cm = best_model_result['confusion_matrix']
+        
+        log_info(f"Using pre-computed results from Step 5:")
+        log_info(f"  Accuracy: {accuracy:.4f}")
+        log_info(f"  Precision: {precision:.4f}")
+        log_info(f"  Recall: {recall:.4f}")
+        log_info(f"  F1-Score: {f1:.4f}")
+        
+    else:
+        # Fallback to original logic if no comparison results
+        if best_model is None:
+            log_info("Loading best model from previous steps...")
+            best_model = load_model()
+            if best_model is None:
+                log_info("No saved model found, training new model...")
+                best_model = train_model(X_train, y_train)
+        
+        # Get predictions and probabilities
+        log_info("Generating predictions and probabilities...")
+        y_pred = best_model.predict(X_test)
+        y_proba = best_model.predict_proba(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        cm = confusion_matrix(y_test, y_pred)
+        
+        # Calculate additional metrics
+        from sklearn.metrics import precision_score, recall_score, f1_score
+        precision = precision_score(y_test, y_pred)
+        recall = recall_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
+    
+    # Import additional metrics for ROC
+    from sklearn.metrics import roc_curve, auc, roc_auc_score
+    
+    # Calculate ROC curve
+    fpr, tpr, _ = roc_curve(y_test, y_proba[:, 1])
+    roc_auc = auc(fpr, tpr)
+    
+    # Get model name for title
+    if comparison_results is not None:
+        best_model_result = max(comparison_results, key=lambda x: x['accuracy'])
+        model_name = best_model_result['model_name']
+    else:
+        model_name = "Gaussian Naive Bayes"
+    
+    # 1. Create Enhanced Confusion Matrix
+    log_info("Creating enhanced confusion matrix...")
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=['False', 'True'], 
+                yticklabels=['False', 'True'])
+    plt.title(f'Step 6: Enhanced Confusion Matrix\n{model_name} - Final Model Evaluation', 
+              fontsize=16, fontweight='bold', pad=20)
+    plt.xlabel('Predicted Label', fontsize=12, fontweight='bold')
+    plt.ylabel('True Label', fontsize=12, fontweight='bold')
+    
+    # Add accuracy text
+    plt.text(0.5, -0.1, f'Accuracy: {accuracy:.4f}', 
+             ha='center', va='center', transform=plt.gca().transAxes,
+             bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8),
+             fontsize=12, fontweight='bold')
+    
+    confusion_matrix_path = os.path.join(output_dir, 'final_confusion_matrix.png')
+    plt.savefig(confusion_matrix_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    log_info(f"Enhanced confusion matrix saved to {confusion_matrix_path}")
+    
+    # 2. Create ROC Curve
+    log_info("Creating ROC curve...")
+    
+    plt.figure(figsize=(10, 8))
+    plt.plot(fpr, tpr, color='darkorange', lw=2, 
+             label=f'ROC curve (AUC = {roc_auc:.4f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random Classifier')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate', fontsize=12, fontweight='bold')
+    plt.ylabel('True Positive Rate', fontsize=12, fontweight='bold')
+    plt.title(f'Step 6: ROC Curve\n{model_name} - Final Model Performance', 
+              fontsize=16, fontweight='bold', pad=20)
+    plt.legend(loc="lower right", fontsize=12)
+    plt.grid(True, alpha=0.3)
+    
+    # Add AUC score text
+    plt.text(0.6, 0.2, f'AUC Score: {roc_auc:.4f}', 
+             bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgreen", alpha=0.8),
+             fontsize=12, fontweight='bold')
+    
+    roc_curve_path = os.path.join(output_dir, 'final_roc_curve.png')
+    plt.savefig(roc_curve_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    log_info(f"ROC curve saved to {roc_curve_path}")
+    
+    # 3. Create Combined Visualization
+    log_info("Creating combined visualization...")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    
+    # Confusion Matrix
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax1,
+                xticklabels=['False', 'True'], 
+                yticklabels=['False', 'True'])
+    ax1.set_title('Confusion Matrix', fontsize=14, fontweight='bold')
+    ax1.set_xlabel('Predicted Label', fontsize=12)
+    ax1.set_ylabel('True Label', fontsize=12)
+    
+    # ROC Curve
+    ax2.plot(fpr, tpr, color='darkorange', lw=2, 
+             label=f'ROC curve (AUC = {roc_auc:.4f})')
+    ax2.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='Random Classifier')
+    ax2.set_xlim([0.0, 1.0])
+    ax2.set_ylim([0.0, 1.05])
+    ax2.set_xlabel('False Positive Rate', fontsize=12)
+    ax2.set_ylabel('True Positive Rate', fontsize=12)
+    ax2.set_title('ROC Curve', fontsize=14, fontweight='bold')
+    ax2.legend(loc="lower right", fontsize=10)
+    ax2.grid(True, alpha=0.3)
+    
+    plt.suptitle(f'Step 6: Final Model Evaluation - {model_name}\nConfusion Matrix & ROC Curve', 
+                 fontsize=16, fontweight='bold', y=0.95)
+    plt.tight_layout()
+    
+    combined_visualization_path = os.path.join(output_dir, 'final_combined_visualization.png')
+    plt.savefig(combined_visualization_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    log_info(f"Combined visualization saved to {combined_visualization_path}")
+    
+    # 4. Create Detailed Metrics Table
+    log_info("Creating detailed metrics table...")
+    
+    # Create metrics table
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.axis('tight')
+    ax.axis('off')
+    
+    metrics_data = [
+        ['Metric', 'Value', 'Description'],
+        ['Accuracy', f'{accuracy:.4f}', 'Overall correctness of predictions'],
+        ['Precision', f'{precision:.4f}', 'True positives / (True positives + False positives)'],
+        ['Recall', f'{recall:.4f}', 'True positives / (True positives + False negatives)'],
+        ['F1-Score', f'{f1:.4f}', 'Harmonic mean of precision and recall'],
+        ['AUC Score', f'{roc_auc:.4f}', 'Area under ROC curve'],
+        ['True Positives', str(cm[1, 1]), 'Correctly predicted positive cases'],
+        ['True Negatives', str(cm[0, 0]), 'Correctly predicted negative cases'],
+        ['False Positives', str(cm[0, 1]), 'Incorrectly predicted positive cases'],
+        ['False Negatives', str(cm[1, 0]), 'Incorrectly predicted negative cases']
+    ]
+    
+    table = ax.table(cellText=metrics_data, cellLoc='center', loc='center')
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1.2, 1.8)
+    
+    # Style the table
+    for i in range(len(metrics_data[0])):
+        table[(0, i)].set_facecolor('#2196F3')
+        table[(0, i)].set_text_props(weight='bold', color='white')
+    
+    plt.title(f'Step 6: Final Model Metrics Summary - {model_name}', fontsize=16, fontweight='bold', pad=20)
+    
+    metrics_table_path = os.path.join(output_dir, 'final_metrics_table.png')
+    plt.savefig(metrics_table_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    log_info(f"Metrics table saved to {metrics_table_path}")
+    
+    # 5. Create Evaluation Documentation
+    log_info("Creating evaluation documentation...")
+    evaluation_doc = f"""
+    # Step 6: Final Visualization Evaluation Report
+
+    ## Model Performance Summary
+    - **Model Type**: {model_name}
+    - **Accuracy**: {accuracy:.4f}
+    - **Precision**: {precision:.4f}
+    - **Recall**: {recall:.4f}
+    - **F1-Score**: {f1:.4f}
+    - **AUC Score**: {roc_auc:.4f}
+
+    ## Confusion Matrix Analysis
+    - True Positives: {cm[1, 1]} (correctly identified positive cases)
+    - True Negatives: {cm[0, 0]} (correctly identified negative cases)
+    - False Positives: {cm[0, 1]} (incorrectly identified as positive)
+    - False Negatives: {cm[1, 0]} (incorrectly identified as negative)
+
+    ## ROC Curve Analysis
+    - The ROC curve shows the trade-off between True Positive Rate and False Positive Rate
+    - AUC Score of {roc_auc:.4f} indicates {'excellent' if roc_auc > 0.9 else 'good' if roc_auc > 0.8 else 'fair' if roc_auc > 0.7 else 'poor'} model performance
+    - The curve demonstrates the model's ability to distinguish between classes
+
+    ## Key Findings
+    1. The model achieves {'excellent' if accuracy > 0.9 else 'good' if accuracy > 0.8 else 'fair' if accuracy > 0.7 else 'poor'} overall accuracy
+    2. {'High' if precision > 0.8 else 'Moderate' if precision > 0.6 else 'Low'} precision indicates {'low' if precision < 0.7 else 'moderate' if precision < 0.8 else 'low'} false positive rate
+    3. {'High' if recall > 0.8 else 'Moderate' if recall > 0.6 else 'Low'} recall shows {'good' if recall > 0.7 else 'moderate' if recall > 0.6 else 'poor'} ability to find positive cases
+    4. Balanced F1-score of {f1:.4f} indicates {'good' if f1 > 0.8 else 'moderate' if f1 > 0.6 else 'poor'} overall performance
+
+    ## Recommendations
+    - The model is {'ready for production use' if accuracy > 0.8 and roc_auc > 0.8 else 'suitable for further optimization' if accuracy > 0.7 else 'needs improvement before deployment'}
+    - Consider {'fine-tuning parameters' if accuracy < 0.85 else 'exploring additional features' if accuracy < 0.9 else 'monitoring performance in production'} for {'better' if accuracy < 0.9 else 'optimal'} results
+
+    Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    """
+    
+    evaluation_doc_path = os.path.join(output_dir, 'evaluation_report.txt')
+    with open(evaluation_doc_path, 'w') as f:
+        f.write(evaluation_doc)
+    log_info(f"Evaluation documentation saved to {evaluation_doc_path}")
+    
+    # 6. Create Summary Statistics
+    log_info("Creating summary statistics...")
+    summary_stats = {
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1,
+        'auc_score': roc_auc,
+        'true_positives': int(cm[1, 1]),
+        'true_negatives': int(cm[0, 0]),
+        'false_positives': int(cm[0, 1]),
+        'false_negatives': int(cm[1, 0]),
+        'total_samples': len(y_test),
+        'model_type': model_name,
+        'evaluation_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    
+    # Save summary statistics as JSON
+    import json
+    summary_stats_path = os.path.join(output_dir, 'summary_statistics.json')
+    with open(summary_stats_path, 'w') as f:
+        json.dump(summary_stats, f, indent=2)
+    log_info(f"Summary statistics saved to {summary_stats_path}")
+    
+    # 7. Create Final Report PDF
+    log_info("Creating final report PDF...")
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Title
+    pdf.set_font('Arial', 'B', 16)
+    pdf.cell(0, 10, 'Step 6: Final Visualization Report', ln=True, align='C')
+    pdf.ln(10)
+    
+    # Model Information
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, f'Model: {model_name}', ln=True)
+    pdf.cell(0, 10, 'Model Performance Metrics:', ln=True)
+    pdf.set_font('Arial', '', 10)
+    pdf.cell(0, 8, f'Accuracy: {accuracy:.4f}', ln=True)
+    pdf.cell(0, 8, f'Precision: {precision:.4f}', ln=True)
+    pdf.cell(0, 8, f'Recall: {recall:.4f}', ln=True)
+    pdf.cell(0, 8, f'F1-Score: {f1:.4f}', ln=True)
+    pdf.cell(0, 8, f'AUC Score: {roc_auc:.4f}', ln=True)
+    pdf.ln(10)
+    
+    # Confusion Matrix Summary
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, 'Confusion Matrix Summary:', ln=True)
+    pdf.set_font('Arial', '', 10)
+    pdf.cell(0, 8, f'True Positives: {cm[1, 1]}', ln=True)
+    pdf.cell(0, 8, f'True Negatives: {cm[0, 0]}', ln=True)
+    pdf.cell(0, 8, f'False Positives: {cm[0, 1]}', ln=True)
+    pdf.cell(0, 8, f'False Negatives: {cm[1, 0]}', ln=True)
+    pdf.ln(10)
+    
+    # Generated Files
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, 'Generated Files:', ln=True)
+    pdf.set_font('Arial', '', 10)
+    pdf.cell(0, 8, f'1. {confusion_matrix_path}', ln=True)
+    pdf.cell(0, 8, f'2. {roc_curve_path}', ln=True)
+    pdf.cell(0, 8, f'3. {combined_visualization_path}', ln=True)
+    pdf.cell(0, 8, f'4. {metrics_table_path}', ln=True)
+    pdf.cell(0, 8, f'5. {evaluation_doc_path}', ln=True)
+    pdf.cell(0, 8, f'6. {summary_stats_path}', ln=True)
+    
+    final_report_path = os.path.join(output_dir, 'final_report.pdf')
+    pdf.output(final_report_path)
+    log_info(f"Final report PDF saved to {final_report_path}")
+    
+    log_info("Step 6 completed successfully!")
+    log_info(f"All visualizations and documentation saved to: {output_dir}")
+    log_info("=" * 60)
+    
+    return {
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1,
+        'auc_score': roc_auc,
+        'confusion_matrix': cm,
+        'output_dir': output_dir,
+        'model_name': model_name,
+        'generated_files': [
+            confusion_matrix_path,
+            roc_curve_path,
+            combined_visualization_path,
+            metrics_table_path,
+            evaluation_doc_path,
+            summary_stats_path,
+            final_report_path
+        ]
+    }
+
 def main():
     # Step 1: Training and tuning
     best_model, X_train, X_test, y_train, y_test, best_results = train_model_step()
@@ -879,6 +1227,15 @@ def main():
         X_test=X_test,
         y_train=y_train,
         y_test=y_test
+    )
+    
+    # Step 6: Final visualization (Confusion Matrix & ROC)
+    final_visualization_results = step6_final_visualization(
+        X_train=X_train,
+        X_test=X_test,
+        y_train=y_train,
+        y_test=y_test,
+        comparison_results=comparison_results  # Pass the comparison results
     )
     
     log_info("All steps completed successfully!")

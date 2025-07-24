@@ -13,7 +13,7 @@ FEATURE_OUTPUT_DIR = 'output/00_feature_extraction'
 
 class FeatureExtractor:
     def __init__(self, image_size=(64, 64)):
-        self.output_dir = 'output/feature_extraction'
+        self.output_dir = FEATURE_OUTPUT_DIR
         self.image_size = image_size
         self.feature_names = []
         
@@ -335,7 +335,7 @@ def extract_features_from_dataset(true_dir, false_dir, image_size=(64, 64)):
     return np.array(all_features), np.array(all_labels), feature_names
 
 
-def create_feature_analysis_plots(X, feature_names, save_path='output/feature_extraction/feature_analysis.png'):
+def create_feature_analysis_plots(X, feature_names, save_path=f'{FEATURE_OUTPUT_DIR}/feature_analysis.png'):
     """Create feature analysis plots"""
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
     fig.suptitle('Feature Analysis - Color, Texture, and Shape Features', fontsize=16)
